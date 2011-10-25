@@ -5,7 +5,7 @@ Standards: $(LINK2 http://tools.ietf.org/html/rfc1321, RFC 1321)
 Copyright: Copyright © 2011 Piotr Szturmaj
 License: $(LINK2 http://boost.org/LICENSE_1_0.txt, Boost License 1.0)
 Authors: Piotr Szturmaj
-Source: $(PHOBOSSRC std/crypto/hash/_sha.d)
+Source: $(PHOBOSSRC std/crypto/hash/_md5.d)
 */
 
 module std.crypto.hash.md5;

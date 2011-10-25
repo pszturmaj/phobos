@@ -5,7 +5,7 @@ Standards: $(LINK2 http://tools.ietf.org/html/rfc2104, RFC 2104)
 Copyright: Copyright © 2011 Piotr Szturmaj
 License: $(LINK2 http://boost.org/LICENSE_1_0.txt, Boost License 1.0)
 Authors: Piotr Szturmaj
-Source: $(PHOBOSSRC std/crypto/hash/_sha.d)
+Source: $(PHOBOSSRC std/crypto/hash/_hmac.d)
 */
 
 module std.crypto.mac.hmac;
