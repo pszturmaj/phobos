@@ -42,7 +42,7 @@ immutable uint[64] r = [
 
 public:
 
-class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
+final class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
 {
     version (unittest) static const string[] testVectors = [
         "", "d41d8cd98f00b204e9800998ecf8427e",
@@ -64,13 +64,12 @@ class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
         h[3] = 0x10325476;
     }
     
-    protected final override void transform() @safe nothrow
+    protected final override void transform() @safe nothrow pure
     {
         version (BigEndian)
         {
-            mixin(expandLoop(0, 16, q{
+            foreach (i; 0 .. 16)
                 w[i] = swapEndian(w[i]);
-            }));
         }
         
         uint a, b, c, d, e, f, t;
@@ -80,41 +79,45 @@ class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
         c = h[2];
         d = h[3];
         
-        mixin(expandLoop(0, 16, q{
+        foreach (i; 0 .. 16)
+        {
             f = d ^ (b & (c ^ d));
             t = d;
             d = c;
             c = b;
             b += rotl(a + f + k[i] + w[g[i]], r[i]);
             a = t;
-        }));
+        }
         
-        mixin(expandLoop(16, 32, q{
+        foreach (i; 16 .. 32)
+        {
             f = c ^ (d & (b ^ c));
             t = d;
             d = c;
             c = b;
             b += rotl(a + f + k[i] + w[g[i]], r[i]);
             a = t;
-        }));
+        }
         
-        mixin(expandLoop(32, 48, q{
+        foreach (i; 32 .. 48)
+        {
             f = b ^ c ^ d;
             t = d;
             d = c;
             c = b;
             b += rotl(a + f + k[i] + w[g[i]], r[i]);
             a = t;
-        }));
+        }
         
-        mixin(expandLoop(48, 64, q{
+        foreach (i; 48 .. 64)
+        {
             f = c ^ (b | ~d);
             t = d;
             d = c;
             c = b;
             b += rotl(a + f + k[i] + w[g[i]], r[i]);
             a = t;
-        }));
+        }
 
         h[0] += a;
         h[1] += b;
@@ -124,14 +127,13 @@ class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
 
     protected override void finishInternal(ubyte[] hash)
     {
-        (cast(ubyte[])w)[offset++] = 0x80; // append one bit
+        setByte(w, offset++, cast(ubyte)0x80); // append one bit
         padTo(56);
         
         version (BigEndian)
             bits = swapEndian(bits);
 
-        memcpy(&w[14], &bits, 8);
-        
+        memCopy(w, 56, bits, 0, 8);
         transform();
         
         version (BigEndian)
@@ -140,7 +142,7 @@ class MD5 : MerkleDamgardImpl!(uint, 4, 16, 16, 16)
                 a = swapEndian(a);
         }
         
-        memcpy(hash.ptr, &h, min(hashLength, hash.length));
+        memCopy(hash, 0, h, 0, min(hashLength, hash.length));
     }
 }
 

@@ -583,13 +583,12 @@ class TigerImpl(ubyte pad) : MerkleDamgardImpl!(ulong, 3, 8, 8, 24)
         h[2] = 0xf096a5b4c3b2e187;
     }
     
-    protected final override void transform() @safe nothrow
+    protected final override void transform() @safe nothrow pure
     {
         version (BigEndian)
         {
-            mixin(expandLoop(0, 8, q{
+            foreach (i; 0 .. 8)
                 w[i] = swapEndian(w[i]);
-            }));
         }
         
         void pass(ref ulong a, ref ulong b, ref ulong c, ulong mul) nothrow
@@ -660,14 +659,13 @@ class TigerImpl(ubyte pad) : MerkleDamgardImpl!(ulong, 3, 8, 8, 24)
 
     protected override void finishInternal(ubyte[] hash)
     {
-        (cast(ubyte[])w)[offset++] = pad; // append one bit
+        setByte(w, offset++, cast(ubyte)pad); // append one bit
         padTo(56);
         
         version (BigEndian)
             bits = swapEndian(bits);
 
         w[7] = bits;
-        
         transform();
         
         version (BigEndian)
@@ -676,7 +674,7 @@ class TigerImpl(ubyte pad) : MerkleDamgardImpl!(ulong, 3, 8, 8, 24)
                 a = swapEndian(a);
         }
         
-        memcpy(hash.ptr, &h, min(hashLength, hash.length));
+        memCopy(hash, 0, h, 0, min(hashLength, hash.length));
     }
 }
 

@@ -63,7 +63,7 @@ immutable ulong[80] k512 = [
 public:
 
 ///
-class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
+final class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
 {
     version (unittest) static const string[] testVectors = [
         "", "da39a3ee5e6b4b0d3255bfef95601890afd80709",
@@ -86,18 +86,16 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
         h[4] = 0xc3d2e1f0;
     }
 
-    protected override void transform() @safe nothrow
+    protected override void transform() @safe nothrow pure
     {
         version (LittleEndian)
         {
-            mixin(expandLoop(0, 16, q{
+            foreach (i; 0 .. 16)
                 w[i] = swapEndian(w[i]);
-            }));
         }
         
-        mixin(expandLoop(16, 80, q{
+        foreach (i; 16 .. 80)
             w[i] = rotl(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1);
-        }));
         
         uint a, b, c, d, e, f, k, t;
         
@@ -109,7 +107,8 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
         
         k = 0x5a827999;
 
-        mixin(expandLoop(0, 20, q{
+        foreach (i; 0 .. 20)
+        {
             f = (b & c) | (~b & d);
             t = rotl(a, 5) + f + e + k + w[i];
             e = d;
@@ -117,11 +116,12 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
             c = rotl(b, 30);
             b = a;
             a = t;
-        }));
+        }
 
         k = 0x6ed9eba1;
         
-        mixin(expandLoop(20, 40, q{
+        foreach (i; 20 .. 40)
+        {
             f = b ^ c ^ d;
             t = rotl(a, 5) + f + e + k + w[i];
             e = d;
@@ -129,11 +129,12 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
             c = rotl(b, 30);
             b = a;
             a = t;
-        }));
+        }
         
         k = 0x8f1bbcdc;
         
-        mixin(expandLoop(40, 60, q{
+        foreach (i; 40 .. 60)
+        {
             f = (b & c) | (b & d) | (c & d);
             t = rotl(a, 5) + f + e + k + w[i];
             e = d;
@@ -141,11 +142,12 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
             c = rotl(b, 30);
             b = a;
             a = t;
-        }));
+        }
 
         k = 0xca62c1d6;
         
-        mixin(expandLoop(60, 80, q{
+        foreach (i; 60 .. 80)
+        {
             f = b ^ c ^ d;
             t = rotl(a, 5) + f + e + k + w[i];
             e = d;
@@ -153,7 +155,7 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
             c = rotl(b, 30);
             b = a;
             a = t;
-        }));
+        }
 
         h[0] += a;
         h[1] += b;
@@ -164,23 +166,22 @@ class SHA1 : MerkleDamgardImpl!(uint, 5, 80, 16, 20)
     
     protected override void finishInternal(ubyte[] hash)
     {
-        (cast(ubyte[])w)[offset++] = 0x80; // append one bit
+        setByte(w, offset++, cast(ubyte)0x80); // append one bit
         padTo(56);
         
         version (LittleEndian)
             bits = swapEndian(bits);
-
-        memcpy(&w[14], &bits, 8);
         
+        memCopy(w, 56, bits, 0, 8);
         transform();
         
         version (LittleEndian)
         {
-            foreach(ref a; h)
+            foreach (ref a; h)
                 a = swapEndian(a);
         }
-        
-        memcpy(hash.ptr, &h, min(hashLength, hash.length));
+
+        memCopy(hash, 0, h, 0, min(hashLength, hash.length));
     }
 }
 
@@ -198,23 +199,23 @@ private class SHA256Internal(size_t hashLength) : MerkleDamgardImpl!(uint, 8, 64
         h[7] = 0x5be0cd19;
     }
     
-    protected override void transform() @safe nothrow
+    protected override void transform() @safe nothrow pure
     {
         version (LittleEndian)
         {
-            mixin(expandLoop(0, 16, q{
+            foreach (i; 0 .. 16)
                 w[i] = swapEndian(w[i]);
-            }));
         }
         
         uint a, b, c, d, e, f, g, h;
         uint s0, s1, ch, maj, t1, t2;
 
-        mixin(expandLoop(16, 64, q{
+        foreach (i; 16 .. 64)
+        {
             s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
             s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
             w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-        }));
+        }
         
         a = this.h[0];
         b = this.h[1];
@@ -225,7 +226,8 @@ private class SHA256Internal(size_t hashLength) : MerkleDamgardImpl!(uint, 8, 64
         g = this.h[6];
         h = this.h[7];
         
-        mixin(expandLoop(0, 64, q{
+        foreach (i; 0 .. 64)
+        {
             s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
             s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
             ch = (e & f) ^ (~e & g);
@@ -241,7 +243,7 @@ private class SHA256Internal(size_t hashLength) : MerkleDamgardImpl!(uint, 8, 64
             c = b;
             b = a;
             a = t1 + t2;
-        }));
+        }
         
         this.h[0] += a;
         this.h[1] += b;
@@ -255,14 +257,13 @@ private class SHA256Internal(size_t hashLength) : MerkleDamgardImpl!(uint, 8, 64
     
     protected override void finishInternal(ubyte[] hash)
     {
-        (cast(ubyte[])w)[offset++] = 0x80; // append one bit
+        setByte(w, offset++, cast(ubyte)0x80); // append one bit
         padTo(56);
         
         version (LittleEndian)
             bits = swapEndian(bits);
         
-        memcpy(&w[14], &bits, 8);
-        
+        memCopy(w, 56, bits, 0, 8);
         transform();
         
         version (LittleEndian)
@@ -271,12 +272,12 @@ private class SHA256Internal(size_t hashLength) : MerkleDamgardImpl!(uint, 8, 64
                 a = swapEndian(a);
         }
         
-        memcpy(hash.ptr, &h, min(hashLength, hash.length));
+        memCopy(hash, 0, h, 0, min(hashLength, hash.length));
     }
 }
 
 ///
-class SHA256 : SHA256Internal!32
+final class SHA256 : SHA256Internal!32
 {
     version (unittest) static const string[] testVectors = [
         "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -292,7 +293,7 @@ class SHA256 : SHA256Internal!32
 }
 
 ///
-class SHA224 : SHA256Internal!28
+final class SHA224 : SHA256Internal!28
 {
     version (unittest) static const string[] testVectors = [
         "", "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f",
@@ -328,23 +329,23 @@ private class SHA512Internal(size_t hashLength) : MerkleDamgardImpl!(ulong, 8, 8
         h[7] = 0x5be0cd19137e2179;
     }
     
-    protected override void transform() @safe nothrow
+    protected override void transform() @safe nothrow pure
     {
         version (LittleEndian)
         {
-            mixin(expandLoop(0, 16, q{
+            foreach (i; 0 .. 16)
                 w[i] = swapEndian(w[i]);
-            }));
         }
         
         ulong a, b, c, d, e, f, g, h;
         ulong s0, s1, ch, maj, t1, t2;
 
-        mixin(expandLoop(16, 80, q{
+        foreach (i; 16 .. 80)
+        {
             s0 = rotr(w[i - 15], 1) ^ rotr(w[i - 15], 8) ^ (w[i - 15] >> 7);
             s1 = rotr(w[i - 2], 19) ^ rotr(w[i - 2], 61) ^ (w[i - 2] >> 6);
             w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-        }));
+        }
         
         a = this.h[0];
         b = this.h[1];
@@ -355,7 +356,8 @@ private class SHA512Internal(size_t hashLength) : MerkleDamgardImpl!(ulong, 8, 8
         g = this.h[6];
         h = this.h[7];
         
-        mixin(expandLoop(0, 80, q{
+        foreach (i; 0 .. 80)
+        {
             s0 = rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39);
             s1 = rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41);
             ch = (e & f) ^ (~e & g);
@@ -371,7 +373,7 @@ private class SHA512Internal(size_t hashLength) : MerkleDamgardImpl!(ulong, 8, 8
             c = b;
             b = a;
             a = t1 + t2;
-        }));
+        }
         
         this.h[0] += a;
         this.h[1] += b;
@@ -385,7 +387,7 @@ private class SHA512Internal(size_t hashLength) : MerkleDamgardImpl!(ulong, 8, 8
     
     protected override void finishInternal(ubyte[] hash) @trusted nothrow
     {
-        (cast(ubyte[])w)[offset++] = 0x80;
+        setByte(w, offset++, cast(ubyte)0x80);
         padTo(112);
         
         version (LittleEndian)
@@ -402,12 +404,12 @@ private class SHA512Internal(size_t hashLength) : MerkleDamgardImpl!(ulong, 8, 8
                 a = swapEndian(a);
         }
         
-        memcpy(hash.ptr, &h, min(hashLength, hash.length));
+        memCopy(hash, 0, h, 0, min(hashLength, hash.length));
     }
 }
 
 ///
-class SHA512 : SHA512Internal!64
+final class SHA512 : SHA512Internal!64
 {
     version (unittest) static const string[] testVectors = [
         "", "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e",
@@ -423,7 +425,7 @@ class SHA512 : SHA512Internal!64
 }
 
 ///
-class SHA384 : SHA512Internal!48
+final class SHA384 : SHA512Internal!48
 {
     version (unittest) static const string[] testVectors = [
         "", "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b",
@@ -472,14 +474,14 @@ class SHA512_t(size_t tbits) if (tbits < 512 && tbits != 384) : SHA512Internal!(
         }
     }
     
-    protected override void setIV() @safe nothrow
+    protected final override void setIV() @safe nothrow
     {
         h = IV;
     }
 }
 
 ///
-class SHA512_224 : SHA512_t!224
+final class SHA512_224 : SHA512_t!224
 {
     version (unittest) static const string[] testVectors = [
         "abc", "4634270f707b6a54daae7530460842e20e37ed265ceee9a43e8924aa",
@@ -489,7 +491,7 @@ class SHA512_224 : SHA512_t!224
 }
 
 ///
-class SHA512_256 : SHA512_t!256
+final class SHA512_256 : SHA512_t!256
 {
     version (unittest) static const string[] testVectors = [
         "abc", "53048e2681941ef99b2e29b76b4c7dabe4c2d0c634fc6d46e0e2f13107e7af23",

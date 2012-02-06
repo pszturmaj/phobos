@@ -21,6 +21,7 @@ module std.crypto.hash.base;
 import std.ascii, std.exception, std.range, std.string, std.traits;
 import std.c.string;
 
+package:
 /*
 Currently DMD and GDC does not translate these templated function to ROR/ROL instructions,
 so there are defined non templated functions which are properly translated
@@ -34,12 +35,12 @@ T _rotr(T)(T value, uint shift) @safe pure nothrow
 }
 
 // function that translates to ror
-uint rotr(uint value, uint shift) @safe pure nothrow
+uint rotr(in uint value, in uint shift) @safe pure nothrow
 {
     return (value >> shift) | (value << (32 - shift));
 }
 
-ulong rotr(ulong value, uint shift) @safe pure nothrow
+ulong rotr(in ulong value, in uint shift) @safe pure nothrow
 {
     return (value >> shift) | (value << (64 - shift));
 }
@@ -52,65 +53,92 @@ T _rotl(T)(T value, uint shift) @safe pure nothrow
 }
 
 // function that translates to rol
-uint rotl(uint value, uint shift) @safe pure nothrow
+uint rotl(in uint value, in uint shift) @safe pure nothrow
 {
     return (value << shift) | (value >> (32 - shift));
 }
 
-ulong rotl(ulong value, uint shift) @safe pure nothrow
+ulong rotl(in ulong value, in uint shift) @safe pure nothrow
 {
     return (value << shift) | (value >> (64 - shift));
 }
 
-import std.conv;
-
-version = dontExpandHashLoops;
-
-// doesn't work with unicode
-static string expandLoop(int from, int to, string code) @trusted
+// for CTFE
+void setByte(A)(ref A a, size_t offset, ubyte value) @trusted pure nothrow
+    if (isArray!A)
 {
-    string s;
-
-    version (dontExpandHashLoops)
+    if (__ctfe)
     {
-        s = text("foreach (i; ", from, " .. ", to, ")\n{\n", code, "}\n");
+        alias ElementType!A E;
+        a[offset / E.sizeof] |= value << ((offset % E.sizeof) * 8);
     }
     else
     {
-        foreach (i; from .. to)
-        {
-            string cod = code;
-            
-            for (;;)
-            {
-                bool found = false;
-                char last;
-                
-                foreach (numChar, c; cod)
-                {
-                    if (c == 'i' && last == '[')
-                    {
-                        s ~= cod[0 .. numChar];
-                        s ~= text(i);
-                        found = true;
-                        cod = cod[numChar + 1 .. $];
-                        break;
-                    }
-                    
-                    last = c;
-                }
-                
-                if (!found)
-                {
-                    s ~= cod;
-                    break;
-                }
-            }
-        }
+        (cast(ubyte[])a)[offset] = value;
     }
-    
-    return s;
 }
+
+ubyte getByte(A)(ref A a, size_t offset) pure nothrow
+    if (isArray!A)
+{
+    alias ElementType!A E;
+    return a[offset / E.sizeof] >> ((offset % E.sizeof) * 8) & 0xFF;
+}
+
+ubyte getByte(T)(T t, size_t offset) pure nothrow
+    if (isIntegral!T)
+{
+    return t >> (offset * 8) & 0xFF;
+}
+
+void memCopy(Dst, Src)(ref Dst dst, size_t dstOffset, in Src src, size_t srcOffset, size_t length) @trusted pure nothrow
+    if ((isArray!Src || isIntegral!Src) && isArray!Dst)
+{
+    if (__ctfe)
+    {
+        foreach (i; 0 .. length)
+            setByte(dst, dstOffset + i, getByte(src, srcOffset + i));
+    }
+    else
+    {
+        alias length l;
+        static if (isArray!Src)
+            (cast(ubyte[])dst)[dstOffset .. dstOffset + l] = (cast(ubyte[])src)[srcOffset .. srcOffset + l];
+        else
+            (cast(ubyte[])dst)[dstOffset .. dstOffset + l] = (cast(ubyte*)&src + srcOffset)[0 .. l];
+    }
+}
+
+void memSet(A)(ref A a, size_t offset, size_t length, ubyte value) @trusted pure nothrow
+    if (isArray!A)
+{
+    if (__ctfe)
+    {
+        foreach (i; 0 .. length)
+            setByte(a, offset + i, value);
+    }
+    else
+    {
+        alias length l;
+        (cast(ubyte[])a)[offset .. offset + l] = value;
+    }
+}
+
+void memSet(A)(ref A a, size_t offset, ubyte value)
+    if (isArray!A)
+{
+    if (__ctfe)
+    {
+        alias ElementType!A E;
+        memSet(a, offset, a.length * E.sizeof - offset, value);
+    }
+    else
+    {
+        (cast(ubyte[])a)[offset .. $] = value;
+    }
+}
+
+public:
 
 /// Base class for all hash functions
 abstract class HashFunction
@@ -132,7 +160,7 @@ abstract class HashFunction
     /// Resets to the initial state
     abstract void reset();
     // Implement this to handle incoming data
-    abstract void putArray(const(void)[] data);
+    abstract void putArray(const(ubyte)[] data);
     
     this()
     {
@@ -141,14 +169,19 @@ abstract class HashFunction
 
     /**
     Hash function update operation. This also forms an OutputRange.
-    Params: data = Data to append to the hash buffer.
+    Params: data = Data to append to the hash buffer. May be an input range.
     */
     final void put(T)(in T data)
     {
         static if (isArray!T)
-            putArray(data);
+            putArray(cast(ubyte[])data);
+        else static if (isInputRange!T)
+        {
+            foreach (e; data)
+                put(e);
+        }
         else
-            putArray((cast(ubyte*)&data)[0 .. data.sizeof]);
+            putArray((cast(ubyte*)&data)[0 .. T.sizeof]);
     }
     
     /**
@@ -207,7 +240,7 @@ abstract class HashFunction
     }
 
     // to get lastBits from inside finishInternal()
-    protected ubyte getLastBits()
+    final protected ubyte getLastBits()
     {
         ubyte lastBits = bits % 8;
         return lastBits ? lastBits : 8;
@@ -238,7 +271,7 @@ abstract class MerkleDamgard : HashFunction, IIterativeHashFunction
 
     @safe nothrow
     protected abstract void setIV();
-    @safe nothrow
+    @safe nothrow pure
     protected abstract void transform();
 }
 
@@ -251,12 +284,12 @@ abstract class MerkleDamgardImpl(Word, size_t ivSize, size_t stateSize, size_t b
     protected Word[stateSize] w;
     protected size_t offset;
     
-    override @property size_t blockLength() @safe pure nothrow const
+    final override @property size_t blockLength() @safe pure nothrow const
     {
         return blockLen;
     }
     
-    override @property size_t hashLength() @safe pure nothrow const
+    final override @property size_t hashLength() @safe pure nothrow const
     {
         return hashLen;
     }
@@ -270,7 +303,7 @@ abstract class MerkleDamgardImpl(Word, size_t ivSize, size_t stateSize, size_t b
         offset = 0;
         bits = 0;
     }
-    
+
     final void saveIV()
     {
         if (!savedIV)
@@ -283,43 +316,44 @@ abstract class MerkleDamgardImpl(Word, size_t ivSize, size_t stateSize, size_t b
         savedIV = null;
     }
     
-    protected void padTo(in size_t bytes, in ubyte pad = 0) @trusted nothrow
+    final protected void padTo(in size_t bytes, in ubyte pad = 0) @trusted nothrow
     {
         assert(bytes < blockLength);
         
         if (offset > bytes)
         {
             // we need additional block
-            (cast(ubyte[])w)[offset .. $] = pad;
+            memSet(w, offset, pad);
             transform();
-            (cast(ubyte[])w)[0 .. bytes] = pad;
+            memSet(w, 0, bytes, pad);
         }
         else
         {
-            (cast(ubyte[])w)[offset .. bytes] = pad;
+            memSet(w, offset, bytes - offset, pad);
         }
         
         offset = bytes;
     }
-    
-    override void putArray(const(void)[] data) @trusted nothrow
+
+    final override void putArray(const(ubyte)[] data) @trusted nothrow
     {
         bits += data.length << 3;
         size_t remaining = blockLength - offset;
-        
+
         if (data.length >= remaining)
         {
-            memcpy(&(cast(ubyte[])w)[offset], data.ptr, remaining);
+            memCopy(w, offset, data, 0, remaining);
+
             transform();
             data = data[remaining .. $];
             
             if (data.length >= blockLength)
             {
                 size_t blockCount = data.length / blockLength;
-                
+
                 foreach (i; 0 .. blockCount)
                 {
-                    memcpy(&w, &data[i * blockLength], blockLength);
+                    memCopy(w, 0, data, i * blockLength, blockLength);
                     transform();
                 }
                 
@@ -331,7 +365,7 @@ abstract class MerkleDamgardImpl(Word, size_t ivSize, size_t stateSize, size_t b
         
         if (data.length)
         {
-            memcpy(&(cast(ubyte[])w)[offset], data.ptr, data.length);
+            memCopy(w, offset, data, 0, data.length);
             offset += data.length;
         }
     }

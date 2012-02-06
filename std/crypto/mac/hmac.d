@@ -12,7 +12,7 @@ module std.crypto.mac.hmac;
 
 public import std.crypto.hash.base;
 
-class HMAC(H : IIterativeHashFunction) if (is(H : ISaveableIV)) : HashFunction
+final class HMAC(H : IIterativeHashFunction) if (is(H : ISaveableIV)) : HashFunction
 {
     private H ifunc, ofunc; // inner and outer functions
     private ubyte[] ihash;
@@ -76,7 +76,7 @@ class HMAC(H : IIterativeHashFunction) if (is(H : ISaveableIV)) : HashFunction
         ofunc.reset();
     }
     
-    protected override void putArray(const(void)[] data)
+    protected override void putArray(const(ubyte)[] data)
     {
         ifunc.putArray(data);
         bits += data.length * 8;
